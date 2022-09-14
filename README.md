@@ -1,1 +1,1 @@
-# zero2prod
+# Rust email newsletter api
