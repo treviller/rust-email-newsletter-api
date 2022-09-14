@@ -1,0 +1,34 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "develop" ]
+  pull_request:
+    branches: [ "develop" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install cargo clippy
+      run: rustup component add clippy
+    - name: Install cargo fmt
+      run: rustup component add rustfmt
+    - name: Run linter
+      run: cargo clippy -- -D warnings
+    - name: Run formatter
+      run: cargo fmt -- --check
+    - name: Install cargo audit
+      run: cargo install cargo-audit
+    - name: Check vulnerabilities
+      run: cargo audit
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
