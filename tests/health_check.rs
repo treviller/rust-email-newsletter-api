@@ -4,7 +4,8 @@ fn spawn_app() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind at random port");
     let port = listener.local_addr().unwrap().port();
 
-    let server = rust_email_newsletter_api::run(listener).expect("Failed to start the server");
+    let server =
+        rust_email_newsletter_api::startup::run(listener).expect("Failed to start the server");
     let _ = tokio::spawn(server);
 
     format!("http://127.0.0.1:{}", port)
