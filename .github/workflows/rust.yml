@@ -85,7 +85,3 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
-      - name: Install cargo audit
-        run: cargo install cargo-audit
-      - name: Check vulnerabilities
-        run: cargo audit
