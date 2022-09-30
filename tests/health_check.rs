@@ -1,8 +1,24 @@
 use std::net::TcpListener;
 
-use rust_email_newsletter_api::configuration::{get_configuration, DatabaseSettings};
+use once_cell::sync::Lazy;
+use rust_email_newsletter_api::{
+    configuration::{get_configuration, DatabaseSettings},
+    telemetry::{get_subscriber, initialize_subscriber},
+};
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
+
+static TRACING: Lazy<()> = Lazy::new(|| {
+    let default_level_filter = "info".to_string();
+    let subscriber_name = "test".to_string();
+    if std::env::var("TEST_LOG").is_ok() {
+        let subscriber = get_subscriber(subscriber_name, default_level_filter, std::io::stdout);
+        initialize_subscriber(subscriber);
+    } else {
+        let subscriber = get_subscriber(subscriber_name, default_level_filter, std::io::sink);
+        initialize_subscriber(subscriber);
+    }
+});
 
 pub struct TestApp {
     pub address: String,
@@ -10,12 +26,13 @@ pub struct TestApp {
 }
 
 async fn spawn_app() -> TestApp {
+    Lazy::force(&TRACING);
+
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind at random port");
     let port = listener.local_addr().unwrap().port();
 
     let mut configuration = get_configuration().expect("Failed to read configuration");
     configuration.database.database_name = Uuid::new_v4().to_string();
-
     let connection_pool = configure_database(&configuration.database).await;
 
     let server = rust_email_newsletter_api::startup::run(listener, connection_pool.clone())

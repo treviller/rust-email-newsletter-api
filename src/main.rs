@@ -1,9 +1,12 @@
-use rust_email_newsletter_api::{configuration::get_configuration, startup::run};
+use rust_email_newsletter_api::{configuration::get_configuration, startup::run, telemetry};
 use sqlx::PgPool;
 use std::net::TcpListener;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
+    let subscriber = telemetry::get_subscriber("zero2prod".into(), "info".into(), std::io::stdout);
+    telemetry::initialize_subscriber(subscriber);
+
     let configuration = get_configuration().expect("Failed to read configuration.");
     let connection_pool = PgPool::connect(&configuration.database.connection_string())
         .await
