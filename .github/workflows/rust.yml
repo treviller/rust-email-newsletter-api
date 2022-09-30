@@ -10,10 +10,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  test:
+    name: test
     runs-on: ubuntu-latest
-
     services:
       postgres: 
         image: postgres:12
@@ -21,6 +20,8 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: password
           POSTGRES_DB: postgres
+        ports: 
+         - 5432:5432
 
     steps:
     - uses: actions/checkout@v3
@@ -29,24 +30,62 @@ jobs:
         profile: minimal
         toolchain: stable
         override: true
-    - run: rustup component add clippy
-    - uses: actions-rs/cargo@v1
-      with:
-        command: test
     - name: Migrate database
       run: |
         sudo apt-get install libpq-dev -y
-        cargo install --version=0.2.0 sqlx-cli --no-default-features --features postgres
-        SKIP_DOCKER=true ./scripts/init_db.sh
+        cargo install --version=0.6.0 sqlx-cli --no-default-features --features rustls,postgres
+        SKIP_DOCKER=true ./docker/db/init_db.sh
     - uses: actions-rs/cargo@v1
-      with: 
-        command: clippy
-        args: -- -D warnings
-    - name: Install cargo fmt
-      run: rustup component add rustfmt
-    - name: Run formatter
-      run: cargo fmt -- --check
-    - name: Install cargo audit
-      run: cargo install cargo-audit
-    - name: Check vulnerabilities
-      run: cargo audit
+      with:
+        command: test
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - run: rustup component add rustfmt
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+      - run: rustup component add clippy
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:12
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - run: rustup component add clippy
+      - name: Migrate database
+        run: |
+          sudo apt-get install libpq-dev -y
+          cargo install --version=0.6.0 sqlx-cli --no-default-features --features rustls,postgres
+          SKIP_DOCKER=true ./docker/db/init_db.sh
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings
+      - name: Install cargo audit
+        run: cargo install cargo-audit
+      - name: Check vulnerabilities
+        run: cargo audit
