@@ -1,4 +1,6 @@
-use rust_email_newsletter_api::{configuration::get_configuration, startup::run, telemetry};
+use rust_email_newsletter_api::{
+    configuration::loader::get_configuration, startup::run, telemetry,
+};
 use secrecy::ExposeSecret;
 use sqlx::PgPool;
 use std::net::TcpListener;
@@ -14,7 +16,10 @@ async fn main() -> std::io::Result<()> {
             .await
             .expect("Failed to connect to Postgres");
 
-    let address = format!("127.0.0.1:{}", configuration.application_port);
+    let address = format!(
+        "{}:{}",
+        configuration.application.host, configuration.application.port
+    );
     let listener = TcpListener::bind(address)?;
 
     run(listener, connection_pool)?.await

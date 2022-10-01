@@ -37,7 +37,7 @@ pub async fn newsletter_subscribe(
     name = "Saving new subscriber details in the database",
     skip(form, connection_pool)
 )]
-async fn insert_subscriber(
+pub async fn insert_subscriber(
     connection_pool: &PgPool,
     form: &NewsletterSubscriptionFormData,
 ) -> Result<(), sqlx::Error> {
