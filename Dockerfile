@@ -31,4 +31,4 @@ RUN apt-get update -y \
 COPY --from=builder /app/target/release/rust_email_newsletter_api rust_email_newsletter_api
 COPY configuration configuration
 ENV APP_ENVIRONMENT production
-ENTRYPOINT ["./target/release/rust_email_newsletter_api"]
+ENTRYPOINT ["./rust_email_newsletter_api"]
