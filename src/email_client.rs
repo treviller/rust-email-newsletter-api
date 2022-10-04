@@ -48,7 +48,7 @@ impl EmailClient {
         self.http_client
             .post(&url)
             .basic_auth(
-                &self.api_key.expose_secret(),
+                self.api_key.expose_secret(),
                 Some(&self.secret_key.expose_secret()),
             )
             .json(&request_body)
