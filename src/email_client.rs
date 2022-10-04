@@ -30,22 +30,21 @@ impl EmailClient {
 
     pub async fn send_email(
         &self,
-        recipient_email: SubscriberEmail,
+        recipient_email: &SubscriberEmail,
         subject: &str,
         html_content: &str,
         text_content: &str,
     ) -> Result<(), reqwest::Error> {
         let url = format!("{}/send", self.base_url);
         let request_body = SendEmailRequest {
-            from_email: self.sender.as_ref().to_owned(),
-            to: recipient_email.as_ref().to_owned(),
-            subject: subject.to_owned(),
-            html_part: html_content.to_owned(),
-            text_part: text_content.to_owned(),
+            from_email: self.sender.as_ref(),
+            to: recipient_email.as_ref(),
+            subject,
+            html_part: html_content,
+            text_part: text_content,
         };
 
-        let builder = self
-            .http_client
+        self.http_client
             .post(&url)
             .basic_auth(
                 &self.api_key.expose_secret(),
@@ -58,15 +57,15 @@ impl EmailClient {
     }
 }
 
-struct SendEmailRequest {
-    from_email: String,
-    subject: String,
-    text_part: String,
-    html_part: String,
-    to: String,
+struct SendEmailRequest<'a> {
+    from_email: &'a str,
+    subject: &'a str,
+    text_part: &'a str,
+    html_part: &'a str,
+    to: &'a str,
 }
 
-impl Serialize for SendEmailRequest {
+impl<'a> Serialize for SendEmailRequest<'a> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -93,18 +92,42 @@ mod tests {
         Fake, Faker,
     };
     use secrecy::Secret;
-    use wiremock::{matchers::any, Mock, MockServer, ResponseTemplate};
-
-    use crate::domain::SubscriberEmail;
+    use wiremock::{
+        matchers::{header, header_exists, method, path},
+        Mock, MockServer, ResponseTemplate,
+    };
 
     use super::EmailClient;
+    use crate::domain::SubscriberEmail;
+
+    struct SendEmailBodyMatcher;
+
+    impl wiremock::Match for SendEmailBodyMatcher {
+        fn matches(&self, request: &wiremock::Request) -> bool {
+            let result: Result<serde_json::Value, _> = serde_json::from_slice(&request.body);
+
+            if let Ok(body) = result {
+                body.get("FromEmail").is_some()
+                    && body.get("To").is_some()
+                    && body.get("Subject").is_some()
+                    && body.get("Html-part").is_some()
+                    && body.get("Text-part").is_some()
+            } else {
+                false
+            }
+        }
+    }
 
     #[tokio::test]
-    async fn send_email_fires_a_request_to_base_url() {
+    async fn send_email_sends_the_expected_request() {
         let mock_server = MockServer::start().await;
         let sender = SubscriberEmail::parse(SafeEmail().fake()).unwrap();
 
-        Mock::given(any())
+        Mock::given(header_exists("Authorization"))
+            .and(header("Content-Type", "application/json"))
+            .and(path("/send"))
+            .and(method("POST"))
+            .and(SendEmailBodyMatcher)
             .respond_with(ResponseTemplate::new(200))
             .expect(1)
             .mount(&mock_server)
@@ -121,7 +144,7 @@ mod tests {
         let content: String = Paragraph(1..10).fake();
 
         let _ = email_client
-            .send_email(subscriber_email, &subject, &content, &content)
+            .send_email(&subscriber_email, &subject, &content, &content)
             .await;
     }
 }
