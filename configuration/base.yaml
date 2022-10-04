@@ -12,4 +12,5 @@ email_client:
   sender_email: "test@gmail.com"
   api_key: "testkey"
   secret_key: "testkey"
+  timeout_seconds: 10
   

@@ -45,6 +45,7 @@ async fn spawn_app() -> TestApp {
         sender_email,
         configuration.email_client.api_key,
         configuration.email_client.secret_key,
+        std::time::Duration::from_millis(200),
     );
 
     let server =
