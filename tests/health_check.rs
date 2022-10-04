@@ -3,6 +3,7 @@ use std::net::TcpListener;
 use once_cell::sync::Lazy;
 use rust_email_newsletter_api::{
     configuration::{loader::get_configuration, settings::DatabaseSettings},
+    email_client::EmailClient,
     telemetry::{get_subscriber, initialize_subscriber},
 };
 use sqlx::{Connection, Executor, PgConnection, PgPool};
@@ -35,8 +36,20 @@ async fn spawn_app() -> TestApp {
     configuration.database.database_name = Uuid::new_v4().to_string();
     let connection_pool = configure_database(&configuration.database).await;
 
-    let server = rust_email_newsletter_api::startup::run(listener, connection_pool.clone())
-        .expect("Failed to start the server");
+    let sender_email = configuration
+        .email_client
+        .sender()
+        .expect("Invalid sender email address");
+    let email_client = EmailClient::new(
+        configuration.email_client.base_url,
+        sender_email,
+        configuration.email_client.api_key,
+        configuration.email_client.secret_key,
+    );
+
+    let server =
+        rust_email_newsletter_api::startup::run(listener, connection_pool.clone(), email_client)
+            .expect("Failed to start the server");
     let _ = tokio::spawn(server);
 
     TestApp {

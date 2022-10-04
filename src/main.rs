@@ -1,5 +1,5 @@
 use rust_email_newsletter_api::{
-    configuration::loader::get_configuration, startup::run, telemetry,
+    configuration::loader::get_configuration, email_client::EmailClient, startup::run, telemetry,
 };
 use sqlx::postgres::PgPoolOptions;
 use std::net::TcpListener;
@@ -20,5 +20,16 @@ async fn main() -> std::io::Result<()> {
     );
     let listener = TcpListener::bind(address)?;
 
-    run(listener, connection_pool)?.await
+    let sender_email = configuration
+        .email_client
+        .sender()
+        .expect("Invalid sender email address");
+    let email_client = EmailClient::new(
+        configuration.email_client.base_url,
+        sender_email,
+        configuration.email_client.api_key,
+        configuration.email_client.secret_key,
+    );
+
+    run(listener, connection_pool, email_client)?.await
 }
