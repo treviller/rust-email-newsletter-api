@@ -95,10 +95,9 @@ mod tests {
         Fake, Faker,
     };
     use secrecy::Secret;
-    use tracing_subscriber::fmt::init;
     use wiremock::{
         matchers::{header, header_exists, method, path},
-        Mock, MockBuilder, MockServer, ResponseTemplate,
+        Mock, MockServer, ResponseTemplate,
     };
 
     use super::EmailClient;

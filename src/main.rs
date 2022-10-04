@@ -1,8 +1,6 @@
 use rust_email_newsletter_api::{
-    configuration::loader::get_configuration, email_client::EmailClient, startup::run, telemetry,
+    configuration::loader::get_configuration, startup::Application, telemetry,
 };
-use sqlx::postgres::PgPoolOptions;
-use std::net::TcpListener;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
@@ -10,29 +8,10 @@ async fn main() -> std::io::Result<()> {
     telemetry::initialize_subscriber(subscriber);
 
     let configuration = get_configuration().expect("Failed to read configuration.");
-    let connection_pool = PgPoolOptions::new()
-        .acquire_timeout(std::time::Duration::from_secs(2))
-        .connect_lazy_with(configuration.database.with_db());
 
-    let address = format!(
-        "{}:{}",
-        configuration.application.host, configuration.application.port
-    );
-    let listener = TcpListener::bind(address)?;
+    let application = Application::build(configuration)?;
 
-    let sender_email = configuration
-        .email_client
-        .sender()
-        .expect("Invalid sender email address");
+    application.run_until_stopped().await?;
 
-    let timeout = configuration.email_client.timeout();
-    let email_client = EmailClient::new(
-        configuration.email_client.base_url,
-        sender_email,
-        configuration.email_client.api_key,
-        configuration.email_client.secret_key,
-        timeout,
-    );
-
-    run(listener, connection_pool, email_client)?.await
+    Ok(())
 }
