@@ -8,14 +8,15 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTC_WRAPPER: sccache
-  SCCACHE_CACHE_SIZE: 2G
-  SCCACHE_DIR: /home/runner/.cache/sccache
 
 jobs:
   test:
     name: test
     runs-on: ubuntu-latest
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_DIR: /home/runner/.cache/sccache
     services:
       postgres: 
         image: postgres:12
@@ -72,11 +73,6 @@ jobs:
     - uses: actions-rs/cargo@v1
       with:
         command: test
-    - run: rustup component add clippy
-    - uses: actions-rs/cargo@v1
-      with:
-        command: clippy
-        args: -- -D warnings
     - name: Print sccache stats
       run: sccache --show-stats
     - name: Stop sccache server
@@ -102,15 +98,6 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:12
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -119,11 +106,6 @@ jobs:
           toolchain: stable
           override: true
       - run: rustup component add clippy
-      - name: Migrate database
-        run: |
-          sudo apt-get install libpq-dev -y
-          cargo install --version=0.6.0 sqlx-cli --no-default-features --features rustls,postgres
-          SKIP_DOCKER=true ./docker/db/init_db.sh
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
