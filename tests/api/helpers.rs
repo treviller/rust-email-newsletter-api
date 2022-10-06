@@ -1,4 +1,5 @@
 use once_cell::sync::Lazy;
+use reqwest::Url;
 use rust_email_newsletter_api::{
     configuration::{loader::get_configuration, settings::DatabaseSettings},
     startup::{get_connection_pool, Application},
@@ -21,8 +22,8 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 });
 
 pub struct ConfirmationLinks {
-    pub html: String,
-    pub raw: String,
+    pub html: reqwest::Url,
+    pub raw: reqwest::Url,
 }
 
 pub struct TestApp {
@@ -59,7 +60,14 @@ impl TestApp {
 
             assert_eq!(links.len(), 1);
 
-            links[0].as_str().to_owned()
+            let raw_link = links[0].as_str().to_owned();
+            let mut confirmation_link = Url::parse(&raw_link).unwrap();
+
+            assert_eq!(confirmation_link.host_str().unwrap(), "127.0.0.1");
+
+            confirmation_link.set_port(Some(self.port)).unwrap();
+
+            confirmation_link
         };
 
         ConfirmationLinks {

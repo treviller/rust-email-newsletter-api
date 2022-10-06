@@ -1,6 +1,7 @@
 use actix_web::{web, HttpResponse};
 use chrono::Utc;
-use sqlx::PgPool;
+use rand::{distributions, thread_rng, Rng};
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::{
@@ -45,20 +46,38 @@ pub async fn newsletter_subscribe(
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
 
-    if insert_subscriber(&connection_pool, &new_subscriber)
+    let mut transaction = match connection_pool.begin().await {
+        Ok(transaction) => transaction,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
+    };
+
+    let subscriber_id = match insert_subscriber(&mut transaction, &new_subscriber).await {
+        Ok(subscriber_id) => subscriber_id,
+        Err(_) => return HttpResponse::InternalServerError().finish(),
+    };
+
+    let subscription_token = generate_subscription_token();
+
+    if insert_subscription_token(&mut transaction, &subscriber_id, &subscription_token)
         .await
         .is_err()
     {
-        tracing::error!("Failed to execute query :");
         return HttpResponse::InternalServerError().finish();
-    } else {
-        tracing::info!("New subscriber details have been saved");
     }
 
-    if send_confirmation_email(&email_client, &new_subscriber, &base_url.0)
-        .await
-        .is_err()
+    if send_confirmation_email(
+        &email_client,
+        &new_subscriber,
+        &base_url.0,
+        &subscription_token,
+    )
+    .await
+    .is_err()
     {
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    if transaction.commit().await.is_err() {
         return HttpResponse::InternalServerError().finish();
     }
 
@@ -73,10 +92,11 @@ pub async fn send_confirmation_email(
     email_client: &EmailClient,
     new_subscriber: &NewSubscriber,
     base_url: &str,
+    confirmation_token: &str,
 ) -> Result<(), reqwest::Error> {
     let confirmation_link = format!(
-        "{}/newsletter/subscriptions/confirm?_subscription_token=testtoken",
-        base_url
+        "{}/newsletter/subscriptions/confirm?subscription_token={}",
+        base_url, confirmation_token
     );
 
     email_client
@@ -98,25 +118,60 @@ pub async fn send_confirmation_email(
 
 #[tracing::instrument(
     name = "Saving new subscriber details in the database",
-    skip(form, connection_pool)
+    skip(form, transaction)
 )]
 pub async fn insert_subscriber(
-    connection_pool: &PgPool,
+    transaction: &mut Transaction<'_, Postgres>,
     form: &NewSubscriber,
-) -> Result<(), sqlx::Error> {
+) -> Result<Uuid, sqlx::Error> {
+    let subscriber_id = Uuid::new_v4();
+
     sqlx::query!(
         "INSERT INTO subscriptions (id, email, name, subscribed_at, status) VALUES ($1, $2, $3, $4, 'pending_confirmation')",
-        Uuid::new_v4(),
+        subscriber_id,
         form.email.as_ref(),
         form.name.as_ref(),
         Utc::now()
     )
-    .execute(connection_pool)
+    .execute(transaction)
     .await
     .map_err(|e| {
         tracing::error!("Failed to execute query: {:?}", e);
         e
     })?;
 
+    Ok(subscriber_id)
+}
+
+#[tracing::instrument(
+    name = "Store the subscription token in the database",
+    skip(transaction)
+)]
+async fn insert_subscription_token(
+    transaction: &mut Transaction<'_, Postgres>,
+    subscriber_id: &Uuid,
+    subscription_token: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO subscription_tokens (subscription_token, subscriber_id) VALUES ($1, $2)",
+        subscription_token,
+        subscriber_id
+    )
+    .execute(transaction)
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to execute query: {:?}", e);
+
+        e
+    })?;
+
     Ok(())
+}
+
+fn generate_subscription_token() -> String {
+    let mut rng = thread_rng();
+    std::iter::repeat_with(|| rng.sample(distributions::Alphanumeric))
+        .map(char::from)
+        .take(25)
+        .collect()
 }

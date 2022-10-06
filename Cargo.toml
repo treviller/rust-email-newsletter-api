@@ -16,6 +16,7 @@ name = "rust_email_newsletter_api"
 actix-web = "4"
 chrono = "0.4.15"
 config = "0.13"
+rand = { version = "0.8", features = ["std_rng"]}
 reqwest = {version = "0.11", default-features = false, features = ["json", "rustls-tls"]}
 secrecy = { version = "0.8", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
