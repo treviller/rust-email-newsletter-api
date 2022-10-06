@@ -22,6 +22,7 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 
 pub struct TestApp {
     pub address: String,
+    pub port: u16,
     pub connection_pool: PgPool,
     pub email_server: MockServer,
 }
@@ -31,7 +32,7 @@ impl TestApp {
         let client = reqwest::Client::new();
 
         client
-            .post(format!("{}/newsletter/subscription", self.address))
+            .post(format!("{}/newsletter/subscriptions", self.address))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body)
             .send()
@@ -61,12 +62,14 @@ pub async fn spawn_app() -> TestApp {
     let application =
         Application::build(configuration.clone()).expect("Failed to build the application");
 
-    let address = format!("http://127.0.0.1:{}", application.port());
+    let port = application.port();
+    let address = format!("http://127.0.0.1:{}", port);
 
     let _ = tokio::spawn(application.run_until_stopped());
 
     TestApp {
         address,
+        port,
         connection_pool: get_connection_pool(&configuration.database),
         email_server,
     }

@@ -1,2 +1,3 @@
 pub mod health_check;
-pub mod subscription;
+pub mod subscriptions;
+pub mod subscriptions_confirm;

@@ -6,13 +6,18 @@ use tracing_actix_web::TracingLogger;
 use crate::{
     configuration::settings::{DatabaseSettings, Settings},
     email_client::EmailClient,
-    routes::{health_check::heatlh_check, subscription::newsletter_subscribe},
+    routes::{
+        health_check::heatlh_check, subscriptions::newsletter_subscribe,
+        subscriptions_confirm::newsletter_subscription_confirm,
+    },
 };
 
 pub struct Application {
     port: u16,
     server: Server,
 }
+
+pub struct ApplicationBaseUrl(pub String);
 
 impl Application {
     pub fn build(configuration: Settings) -> Result<Self, std::io::Error> {
@@ -40,7 +45,12 @@ impl Application {
 
         Ok(Self {
             port: listener.local_addr().unwrap().port(),
-            server: run(listener, connection_pool, email_client)?,
+            server: run(
+                listener,
+                connection_pool,
+                email_client,
+                configuration.application.base_url,
+            )?,
         })
     }
 
@@ -63,20 +73,27 @@ pub fn run(
     listener: TcpListener,
     connection_pool: PgPool,
     email_client: EmailClient,
+    base_url: String,
 ) -> Result<Server, std::io::Error> {
     let connection_pool = web::Data::new(connection_pool);
     let email_client = web::Data::new(email_client);
+    let base_url = web::Data::new(ApplicationBaseUrl(base_url));
 
     let server = HttpServer::new(move || {
         App::new()
             .wrap(TracingLogger::default())
             .route("/health_check", web::get().to(heatlh_check))
             .route(
-                "/newsletter/subscription",
+                "/newsletter/subscriptions",
                 web::post().to(newsletter_subscribe),
+            )
+            .route(
+                "/newsletter/subscriptions/confirm",
+                web::get().to(newsletter_subscription_confirm),
             )
             .app_data(connection_pool.clone())
             .app_data(email_client.clone())
+            .app_data(base_url.clone())
     })
     .listen(listener)?
     .run();
