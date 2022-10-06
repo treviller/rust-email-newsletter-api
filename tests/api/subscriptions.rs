@@ -20,14 +20,31 @@ async fn subscribe_to_newsletter_returns_200_with_valid_form_data() {
     let response = app.post_subscriptions(body.to_owned()).await;
 
     assert_eq!(200, response.status().as_u16());
+}
 
-    let saved = sqlx::query!("SELECT email, name FROM subscriptions",)
+#[tokio::test]
+async fn subscriber_to_newsletter_persists_the_new_subscriber() {
+    let app = spawn_app().await;
+
+    let body = "name=JohnDoe&email=test%40test.com";
+
+    Mock::given(path("/send"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+
+    app.post_subscriptions(body.to_owned()).await;
+
+    let saved = sqlx::query!("SELECT email, name, status FROM subscriptions",)
         .fetch_one(&app.connection_pool)
         .await
         .expect("Failed to fetch saved subscription.");
 
     assert_eq!(saved.email, "test@test.com");
     assert_eq!(saved.name, "JohnDoe");
+    assert_eq!(saved.status, "pending_confirmation");
 }
 
 #[tokio::test]
@@ -76,7 +93,6 @@ async fn subscribe_to_newsletter_returns_400_when_data_is_missing() {
 #[tokio::test]
 async fn subcribe_sends_a_confirmation_email_for_valid_data() {
     let app = spawn_app().await;
-
     let body = "name=John%20Doe&email=x7iv7vqe2@mozmail.com";
 
     Mock::given(path("/send"))
@@ -87,4 +103,23 @@ async fn subcribe_sends_a_confirmation_email_for_valid_data() {
         .await;
 
     app.post_subscriptions(body.into()).await;
+
+    let email_request = &app.email_server.received_requests().await.unwrap()[0];
+    let request_body: serde_json::Value = serde_json::from_slice(&email_request.body).unwrap();
+
+    let get_link = |s: &str| {
+        let links: Vec<_> = linkify::LinkFinder::new()
+            .links(s)
+            .filter(|l| *l.kind() == linkify::LinkKind::Url)
+            .collect();
+
+        assert_eq!(links.len(), 1);
+
+        links[0].as_str().to_owned()
+    };
+
+    let html_link = get_link(&request_body["Html-part"].as_str().unwrap());
+    let text_link = get_link(&request_body["Text-part"].as_str().unwrap());
+
+    assert_eq!(html_link, text_link);
 }
