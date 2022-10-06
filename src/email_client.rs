@@ -36,6 +36,7 @@ impl EmailClient {
         html_content: &str,
         text_content: &str,
     ) -> Result<(), reqwest::Error> {
+        tracing::info!("Start sending an email");
         let url = format!("{}/send", self.base_url);
         let request_body = SendEmailRequest {
             from_email: self.sender.as_ref(),

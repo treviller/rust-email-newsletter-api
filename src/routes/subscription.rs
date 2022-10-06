@@ -3,7 +3,10 @@ use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName};
+use crate::{
+    domain::{NewSubscriber, SubscriberEmail, SubscriberName},
+    email_client::EmailClient,
+};
 
 #[derive(serde::Deserialize)]
 pub struct NewsletterSubscriptionFormData {
@@ -24,7 +27,7 @@ impl TryFrom<NewsletterSubscriptionFormData> for NewSubscriber {
 
 #[tracing::instrument(
     name = "Adding a new subscriber",
-    skip(form, connection_pool),
+    skip(form, connection_pool, email_client),
     fields(
         subscriber_email = %form.email,
         subscriber_name = %form.name,
@@ -33,22 +36,37 @@ impl TryFrom<NewsletterSubscriptionFormData> for NewSubscriber {
 pub async fn newsletter_subscribe(
     form: web::Form<NewsletterSubscriptionFormData>,
     connection_pool: web::Data<PgPool>,
+    email_client: web::Data<EmailClient>,
 ) -> HttpResponse {
     let new_subscriber = match form.0.try_into() {
         Ok(subscriber) => subscriber,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
 
-    match insert_subscriber(&connection_pool, &new_subscriber).await {
-        Ok(_) => {
-            tracing::info!("New subscriber details have been saved");
-            HttpResponse::Ok().finish()
-        }
-        Err(e) => {
-            tracing::error!("Failed to execute query : {}", e);
-            HttpResponse::InternalServerError().finish()
-        }
+    if insert_subscriber(&connection_pool, &new_subscriber)
+        .await
+        .is_err()
+    {
+        tracing::error!("Failed to execute query :");
+        return HttpResponse::InternalServerError().finish();
+    } else {
+        tracing::info!("New subscriber details have been saved");
     }
+
+    if email_client
+        .send_email(
+            &new_subscriber.email,
+            "Welcome",
+            "Welcome to our newsletter !",
+            "Welcome to our newsletter !",
+        )
+        .await
+        .is_err()
+    {
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    HttpResponse::Ok().finish()
 }
 
 #[tracing::instrument(

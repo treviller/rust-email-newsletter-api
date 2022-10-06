@@ -1,10 +1,22 @@
 use crate::helpers::spawn_app;
+use wiremock::{
+    matchers::{method, path},
+    Mock, ResponseTemplate,
+};
 
 #[tokio::test]
 async fn subscribe_to_newsletter_returns_200_with_valid_form_data() {
     let app = spawn_app().await;
 
     let body = "name=JohnDoe&email=test%40test.com";
+
+    Mock::given(path("/send"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+
     let response = app.post_subscriptions(body.to_owned()).await;
 
     assert_eq!(200, response.status().as_u16());
@@ -43,9 +55,6 @@ async fn subscribe_to_newsletter_returns_400_when_fields_are_present_but_invalid
 #[tokio::test]
 async fn subscribe_to_newsletter_returns_400_when_data_is_missing() {
     let app = spawn_app().await;
-    let client = reqwest::Client::new();
-
-    let url = format!("{}/newsletter/subscription", app.address);
     let test_cases = vec![
         ("email=test2@test.com", "missing the name"),
         ("name=JaneDoe", "missing the email"),
@@ -62,4 +71,20 @@ async fn subscribe_to_newsletter_returns_400_when_data_is_missing() {
             error_message
         );
     }
+}
+
+#[tokio::test]
+async fn subcribe_sends_a_confirmation_email_for_valid_data() {
+    let app = spawn_app().await;
+
+    let body = "name=John%20Doe&email=x7iv7vqe2@mozmail.com";
+
+    Mock::given(path("/send"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&app.email_server)
+        .await;
+
+    app.post_subscriptions(body.into()).await;
 }
