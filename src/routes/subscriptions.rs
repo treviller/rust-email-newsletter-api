@@ -114,6 +114,10 @@ pub async fn send_confirmation_email(
             ),
         )
         .await
+        .map_err(|e| {
+            tracing::error!("An error occurred during email sending : {:?}", e);
+            e
+        })
 }
 
 #[tracing::instrument(
