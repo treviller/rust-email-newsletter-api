@@ -3,6 +3,7 @@ use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 
+use crate::routes::newsletters::publish_newsletter;
 use crate::{
     configuration::settings::{DatabaseSettings, Settings},
     email_client::EmailClient,
@@ -84,13 +85,14 @@ pub fn run(
             .wrap(TracingLogger::default())
             .route("/health_check", web::get().to(heatlh_check))
             .route(
-                "/newsletter/subscriptions",
+                "/newsletters/subscriptions",
                 web::post().to(newsletter_subscribe),
             )
             .route(
-                "/newsletter/subscriptions/confirm",
+                "/newsletters/subscriptions/confirm",
                 web::get().to(newsletter_subscription_confirm),
             )
+            .route("/newsletters", web::post().to(publish_newsletter))
             .app_data(connection_pool.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())

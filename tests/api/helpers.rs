@@ -38,7 +38,7 @@ impl TestApp {
         let client = reqwest::Client::new();
 
         client
-            .post(format!("{}/newsletter/subscriptions", self.address))
+            .post(format!("{}/newsletters/subscriptions", self.address))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body)
             .send()
@@ -46,10 +46,16 @@ impl TestApp {
             .expect("Failed to execute request")
     }
 
-    pub async fn get_confirmation_links(
-        &self,
-        email_request: &wiremock::Request,
-    ) -> ConfirmationLinks {
+    pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(&format!("{}/newsletters", &self.address))
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub fn get_confirmation_links(&self, email_request: &wiremock::Request) -> ConfirmationLinks {
         let request_body: serde_json::Value = serde_json::from_slice(&email_request.body).unwrap();
 
         let get_link = |s: &str| {
