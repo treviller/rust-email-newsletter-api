@@ -1,6 +1,7 @@
 application:
   host: 127.0.0.1
   base_url: "http://127.0.0.1"
+  hmac_secret: "9ip7NsPdEQ5VW4iUCfo%bi3Fx&cn3@HCk9nvn!Y8BYE2VqkuEM$GDN"
 
 database:
   require_ssl: false

@@ -1,8 +1,11 @@
 use actix_web::{dev::Server, web, App, HttpServer};
+use secrecy::Secret;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 
+use crate::routes::home::home;
+use crate::routes::login::{login, login_form};
 use crate::routes::newsletters::publish_newsletter;
 use crate::{
     configuration::settings::{DatabaseSettings, Settings},
@@ -19,6 +22,7 @@ pub struct Application {
 }
 
 pub struct ApplicationBaseUrl(pub String);
+pub struct HmacSecret(pub Secret<String>);
 
 impl Application {
     pub fn build(configuration: Settings) -> Result<Self, std::io::Error> {
@@ -51,6 +55,7 @@ impl Application {
                 connection_pool,
                 email_client,
                 configuration.application.base_url,
+                HmacSecret(configuration.application.hmac_secret),
             )?,
         })
     }
@@ -75,10 +80,12 @@ pub fn run(
     connection_pool: PgPool,
     email_client: EmailClient,
     base_url: String,
+    hmac_secret: HmacSecret,
 ) -> Result<Server, std::io::Error> {
     let connection_pool = web::Data::new(connection_pool);
     let email_client = web::Data::new(email_client);
     let base_url = web::Data::new(ApplicationBaseUrl(base_url));
+    let hmac_secret = web::Data::new(hmac_secret);
 
     let server = HttpServer::new(move || {
         App::new()
@@ -93,9 +100,13 @@ pub fn run(
                 web::get().to(newsletter_subscription_confirm),
             )
             .route("/newsletters", web::post().to(publish_newsletter))
+            .route("/", web::get().to(home))
+            .route("/login", web::get().to(login_form))
+            .route("/login", web::post().to(login))
             .app_data(connection_pool.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())
+            .app_data(hmac_secret.clone())
     })
     .listen(listener)?
     .run();
